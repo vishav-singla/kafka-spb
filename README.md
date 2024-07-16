@@ -1,18 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kafka Integration with Spring Boot</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1 { color: #333; }
-        h2 { color: #555; }
-        code { background: #f4f4f4; padding: 2px 4px; border-radius: 4px; }
-        pre { background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; }
-    </style>
-</head>
-<body>
+
 
 <h1>Kafka Integration with Spring Boot</h1>
 
