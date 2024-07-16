@@ -1,18 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kafka Integration with Spring Boot</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1 { color: #333; }
-        h2 { color: #555; }
-        code { background: #f4f4f4; padding: 2px 4px; border-radius: 4px; }
-        pre { background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; }
-    </style>
-</head>
-<body>
 
 <h1>Kafka Integration with Spring Boot</h1>
 
@@ -40,7 +25,9 @@ cd kafkapp</code></pre>
 
 <h3>2. Setup Kafka</h3>
 <p>Ensure that you have Kafka and Zookeeper running. You can use Docker to set them up:</p>
-<pre><code>version: '2'
+<pre><code>
+
+version: '2'
 
 services:
   zookeeper:
@@ -52,12 +39,19 @@ services:
     image: wurstmeister/kafka:latest
     ports:
       - "9092:9092"
+    expose:
+      - "9093"
     environment:
       KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka:9093,OUTSIDE://localhost:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
       KAFKA_LISTENERS: INSIDE://0.0.0.0:9093,OUTSIDE://0.0.0.0:9092
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181</code></pre>
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_CREATE_TOPICS: "my-topic:1:1"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
+</code>
 <h3>3. Configuration</h3>
 <p>Update <code>src/main/resources/application.yaml</code> with the following configurations:</p>
 <pre><code>spring:
