@@ -1,94 +1,165 @@
+<body>
+    <h1>Kafka Application Structure</h1>
 
+    <h2>application.yml</h2>
+<pre>
+spring:
+application:
+name: kafkapp
+main:
+allow-bean-definition-overriding: true
 
-<h1>Kafka Integration with Spring Boot</h1>
+kafka:
+bootstrap-servers: localhost:9092
+consumer:
+auto-offset-reset: earliest
+key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+properties:
+spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+spring.json.trusted.packages: "com.vishav.kafkapp.model"
+producer:
+key-serializer: org.apache.kafka.common.serialization.StringSerializer
+value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+listener:
+missing-topics-fatal: false
+</pre>
 
-<p>This project demonstrates how to integrate Apache Kafka with a Spring Boot application, enabling the sending and receiving of messages through Kafka topics.</p>
+    <h2>KafkaConfig.java</h2>
+    <pre>
+@Configuration
+@EnableKafka
+public class KafkaConfig {
 
-<h2>Features</h2>
-<ul>
-    <li><strong>Kafka Producer</strong>: Sends messages to a specified Kafka topic.</li>
-    <li><strong>Kafka Consumer</strong>: Listens for messages from a Kafka topic.</li>
-    <li><strong>Dynamic Topic Creation</strong>: Allows creating Kafka topics with specified partitions and replication factors.</li>
-</ul>
+    @Bean
+    public NewTopic topic1() {
+        return new NewTopic("kafka-demo-1", 3, (short) 1);
+    }
 
-<h2>Prerequisites</h2>
-<ul>
-    <li>Java 11 or later</li>
-    <li>Apache Kafka (running locally or accessible via specified bootstrap servers)</li>
-    <li>Spring Boot 3.x</li>
-</ul>
+    @Bean
+    public NewTopic topic2() {
+        return new NewTopic("kafka-demo-2", 2, (short) 1);
+    }
 
-<h2>Getting Started</h2>
+    @Bean
+    public NewTopic topic3() {
+        return new NewTopic("kafka-demo-3", 4, (short) 1);
+    }
 
-<h3>1. Clone the Repository</h3>
-<pre><code>git clone &lt;repository-url&gt;
-cd kafkapp</code></pre>
+    @Bean
+    public ProducerFactory&lt;String, Object&gt; producerFactory() {
+        Map&lt;String, Object&gt; configProps = new HashMap&lt;&gt;();
+        configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        return new DefaultKafkaProducerFactory&lt;&gt;(configProps);
+    }
 
-<h3>2. Setup Kafka</h3>
-<p>Ensure that you have Kafka and Zookeeper running. You can use Docker to set them up:</p>
-<pre><code>version: '2'
+    @Bean
+    public KafkaTemplate&lt;String, Object&gt; kafkaTemplate() {
+        return new KafkaTemplate&lt;&gt;(producerFactory());
+    }
+}
+</pre>
 
-services:
-  zookeeper:
-    image: wurstmeister/zookeeper:latest
-    ports:
-      - "2181:2181"
+    <h2>MessageConsumer.java</h2>
+    <pre>
+@Service
+public class MessageConsumer {
 
-  kafka:
-    image: wurstmeister/kafka:latest
-    ports:
-      - "9092:9092"
-    expose:
-      - "9093"
-    environment:
-      KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka:9093,OUTSIDE://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
-      KAFKA_LISTENERS: INSIDE://0.0.0.0:9093,OUTSIDE://0.0.0.0:9092
-      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_CREATE_TOPICS: "my-topic:1:1"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-</code></pre>
+    private static final Logger logger = LoggerFactory.getLogger(MessageConsumer.class);
 
-<h3>3. Configuration</h3>
-<p>Update <code>src/main/resources/application.yaml</code> with the following configurations:</p>
-<pre><code>spring:
-  application:
-    name: kafkapp
-  kafka:
-    bootstrap-servers: localhost:9092
-    consumer:
-      group-id: my-group-id</code></pre>
+    @KafkaListener(topics = {"kafka-demo-1", "kafka-demo-2", "kafka-demo-3"}, 
+                   groupId = "group-1")
+    public void listenGroup1(User user, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
+        logger.info("Group-1 received message from topic {}: {}", topic, user);
+    }
 
-<h3>4. Build and Run the Application</h3>
-<pre><code>mvn spring-boot:run</code></pre>
+    @KafkaListener(topics = {"kafka-demo-1", "kafka-demo-2"}, 
+                   groupId = "group-2")
+    public void listenGroup2(User user, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
+        logger.info("Group-2 received message from topic {}: {}", topic, user);
+    }
 
-<h3>5. Sending Messages</h3>
-<p>To send messages to the Kafka topic, use the following HTTP POST request:</p>
-<pre><code>POST http://localhost:8080/api/kafka/send
-Content-Type: application/json
+    @KafkaListener(topics = "kafka-demo-3", 
+                   groupId = "group-3")
+    public void listenGroup3(User user, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
+        logger.info("Group-3 received message from topic {}: {}", topic, user);
+    }
+}
+</pre>
 
-{
-    "name": "John Doe",
-    "email": "john.doe@example.com"
-}</code></pre>
+    <h2>KafkaController.java</h2>
+    <pre>
+@RestController
+@RequestMapping("/api/kafka")
+public class KafkaController {
 
-<h3>6. Creating Topics</h3>
-<p>You can create a topic by sending a POST request to <code>/create-topic</code> endpoint:</p>
-<pre><code>POST http://localhost:8080/create-topic?name=my-topic&partitions=3</code></pre>
+    @Autowired
+    private MessageProducer messageProducer;
 
-<h3>7. Consuming Messages</h3>
-<p>The application will automatically consume messages from the specified topic, and you can observe the logs to see the consumed messages.</p>
+    @PostMapping("/send/topic1")
+    public String sendMessageTopic1(@RequestBody User user) {
+        messageProducer.sendMessage("kafka-demo-1", user);
+        return "Message sent to kafka-demo-1: " + user;
+    }
 
-<h2>Note</h2>
-<ul>
-    <li>Ensure that the Kafka server is up and running before starting the Spring Boot application.</li>
-    <li>Adjust the topic name and partition count as per your requirements.</li>
-</ul>
+    @PostMapping("/send/topic2")
+    public String sendMessageTopic2(@RequestBody User user) {
+        messageProducer.sendMessage("kafka-demo-2", user);
+        return "Message sent to kafka-demo-2: " + user;
+    }
 
-<h2>License</h2>
-<p>This project is licensed under the MIT License.</p>
+    @PostMapping("/send/topic3")
+    public String sendMessageTopic3(@RequestBody User user) {
+        messageProducer.sendMessage("kafka-demo-3", user);
+        return "Message sent to kafka-demo-3: " + user;
+    }
+}
+</pre>
 
+    <h2>MessageProducer.java</h2>
+    <pre>
+@Component
+public class MessageProducer {
+
+    private final KafkaTemplate&lt;String, Object&gt; kafkaTemplate;
+
+    @Autowired
+    public MessageProducer(KafkaTemplate&lt;String, Object&gt; kafkaTemplate) {
+        this.kafkaTemplate = kafkaTemplate;
+    }
+
+    public void sendMessage(String topic, User user) {
+        kafkaTemplate.send(topic, user);
+    }
+}
+</pre>
+
+    <h2>User.java</h2>
+    <pre>
+public class User {
+private String name;
+private int age;
+
+    // Getters and setters
+
+    @Override
+    public String toString() {
+        return "User{name='" + name + "', age=" + age + "}";
+    }
+}
+</pre>
+
+    <h2>Testing Commands</h2>
+    <pre>
+# Send to topic1 (kafka-demo-1)
+curl -X POST -H "Content-Type: application/json" -d "{\"name\":\"John Doe\",\"age\":30}" http://localhost:8080/api/kafka/send/topic1
+
+# Send to topic2 (kafka-demo-2)
+curl -X POST -H "Content-Type: application/json" -d "{\"name\":\"Jane Doe\",\"age\":25}" http://localhost:8080/api/kafka/send/topic2
+
+# Send to topic3 (kafka-demo-3)
+curl -X POST -H "Content-Type: application/json" -d "{\"name\":\"Bob Smith\",\"age\":40}" http://localhost:8080/api/kafka/send/topic3
+</pre>
 </body>
-</html>
